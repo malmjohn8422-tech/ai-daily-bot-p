@@ -32,10 +32,12 @@ class SQLiteStorage:
                     status TEXT NOT NULL,
                     output_summary TEXT,
                     error_message TEXT,
+                    report_path TEXT,
                     started_at TEXT NOT NULL,
                     finished_at TEXT
                 )
             """)
+            self._ensure_task_history_schema(conn)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS trend_items (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,6 +55,11 @@ class SQLiteStorage:
                 )
             """)
             self._ensure_trend_schema(conn)
+
+    def _ensure_task_history_schema(self, conn: sqlite3.Connection):
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(task_history)").fetchall()}
+        if "report_path" not in columns:
+            conn.execute("ALTER TABLE task_history ADD COLUMN report_path TEXT")
 
     def _ensure_trend_schema(self, conn: sqlite3.Connection):
         columns = {row[1] for row in conn.execute("PRAGMA table_info(trend_items)").fetchall()}
@@ -155,6 +162,20 @@ class SQLiteStorage:
                 "UPDATE task_history SET status=?, output_summary=?, finished_at=? WHERE id=?",
                 ("success", output_summary[:500], self._now_iso(), record_id),
             )
+
+    def record_report(self, record_id: int, report_path: str):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE task_history SET report_path=? WHERE id=?",
+                (report_path, record_id),
+            )
+
+    def get_report_path(self, record_id: int) -> str | None:
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT report_path FROM task_history WHERE id=?", (record_id,)
+            ).fetchone()
+        return row[0] if row and row[0] else None
 
     def record_failure(self, record_id: int, error: str):
         with sqlite3.connect(self.db_path) as conn:

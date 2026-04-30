@@ -28,9 +28,10 @@ tasks:
       max_articles: 10
   - name: "📊 GitHub 一周趋势总结"
     schedule: "0 9 * * 0"
-    collector: "github_trending"
+    collector: "none"
     processor: "weekly"
     notifier: "email"
+    save_trends: false
     params:
       language: ""
       since: "daily"

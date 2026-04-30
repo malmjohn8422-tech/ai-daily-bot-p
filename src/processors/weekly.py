@@ -1,29 +1,33 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import zoneinfo
 
 from .base import Processor
 from ..storage import storage
 from ..logger import log
-from ..retry import retry
 
 
 class WeeklySummarizerProcessor(Processor):
     name = "weekly"
 
+    @staticmethod
+    def _metric_label(metric_name: str) -> str:
+        return {
+            "stars": "Stars",
+            "score": "HN 分数",
+            "comments": "评论数",
+        }.get(metric_name, metric_name or "热度")
+
     def process(self, data: list[dict], ai_config: dict, params: dict | None = None) -> str:
+        params = params or {}
         tz = zoneinfo.ZoneInfo("Asia/Shanghai")
-        today = datetime.now(tz)
-        weekday = today.weekday()
-        days_to_sunday = (weekday + 1) % 7
-        sunday = today.replace(hour=0, minute=0, second=0, microsecond=0)
-        if days_to_sunday > 0:
-            from datetime import timedelta
-            sunday -= timedelta(days=days_to_sunday)
+        # Include today's daily report in the weekly summary. On the configured Sunday
+        # run, this covers Monday through Sunday in Asia/Shanghai.
+        report_end = datetime.now(tz).date() + timedelta(days=1)
 
         history = storage.get_trend_history(
             task_name=params.get("task_name", ""),
             days=7,
-            end_date=sunday,
+            end_date=report_end,
         )
 
         if not history:
@@ -40,23 +44,30 @@ class WeeklySummarizerProcessor(Processor):
                 title = item.get("title", "")
                 if title not in all_items:
                     all_items[title] = []
+                metric_name = item.get("metric_name") or "stars"
+                metric_value = item.get("metric_value")
+                if metric_value in (None, 0) and metric_name == "stars":
+                    metric_value = item.get("stars", 0)
                 all_items[title].append({
                     "date": date,
-                    "stars": item.get("stars", 0),
+                    "metric_name": metric_name,
+                    "metric_value": metric_value or 0,
                     "rank": item.get("rank", 0),
                 })
 
-        # 计算每个项目本周出现次数和星数趋势
+        # 计算每个项目本周出现次数和热度趋势
         item_summaries = []
         for title, appearances in all_items.items():
-            dates = sorted([a["date"] for a in appearances])
-            stars = [a["stars"] for a in appearances]
-            first_stars = stars[0]
-            last_stars = stars[-1]
-            growth = last_stars - first_stars
+            appearances = sorted(appearances, key=lambda a: a["date"])
+            metric_name = appearances[-1]["metric_name"]
+            metric_label = self._metric_label(metric_name)
+            first_value = appearances[0]["metric_value"]
+            last_value = appearances[-1]["metric_value"]
+            growth = last_value - first_value
+            growth_text = f"+{growth}" if growth >= 0 else str(growth)
             item_summaries.append(
-                f"  {title}: 出现{len(appearances)}天, Stars {first_stars}→{last_stars}"
-                f"(+{growth}), 最佳排名#{min(a['rank'] for a in appearances)}"
+                f"  {title}: 出现{len(appearances)}天, {metric_label} {first_value}→{last_value}"
+                f"({growth_text}), 最佳排名#{min(a['rank'] for a in appearances)}"
             )
 
         history_text = (
@@ -82,7 +93,6 @@ class WeeklySummarizerProcessor(Processor):
 
         return self._call_ai(prompt, ai_config)
 
-    @retry(max_attempts=3, delay=2, backoff=2)
     def _call_ai(self, prompt: str, ai_config: dict) -> str:
         import httpx
 

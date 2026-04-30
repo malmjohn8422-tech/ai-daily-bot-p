@@ -111,6 +111,10 @@ def validate_config(cfg: dict):
             errors.append(f"{prefix} [{name}] 缺少 processor")
         elif processor not in PROCESSOR_REGISTRY:
             errors.append(f"{prefix} [{name}] 未知处理器 '{processor}'，可选: {list(PROCESSOR_REGISTRY.keys())}")
+        elif processor == "weekly":
+            params = task.get("params") or {}
+            if not isinstance(params, dict) or not params.get("task_name"):
+                errors.append(f"{prefix} [{name}] weekly 处理器需要 params.task_name 指向每日趋势任务")
 
         notifier_name = task.get("notifier")
         if not notifier_name:
@@ -125,6 +129,22 @@ def validate_config(cfg: dict):
                 errors.append(f"{prefix} [{name}] telegram 配置缺少 bot_token")
             if not telegram_cfg.get("chat_id"):
                 errors.append(f"{prefix} [{name}] telegram 配置缺少 chat_id")
+        elif notifier_name == "email":
+            email_cfg = notifier_configs.get("email") or {}
+            if not email_cfg.get("smtp_server"):
+                errors.append(f"{prefix} [{name}] email 配置缺少 smtp_server")
+            try:
+                smtp_port = int(email_cfg.get("smtp_port", 0))
+                if smtp_port <= 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                errors.append(f"{prefix} [{name}] email 配置 smtp_port 必须是正整数")
+            if not email_cfg.get("username"):
+                errors.append(f"{prefix} [{name}] email 配置缺少 username")
+            if not email_cfg.get("password"):
+                errors.append(f"{prefix} [{name}] email 配置缺少 password")
+            if not email_cfg.get("recipient"):
+                errors.append(f"{prefix} [{name}] email 配置缺少 recipient")
 
         # 校验 cron 表达式（使用东八区）
         if task.get("schedule"):

@@ -1,10 +1,10 @@
 from .base import Collector
-from .hacker_news import HackerNewsCollector
 from .github_trending import GitHubTrendingCollector
+from .none import NoneCollector
 
 REGISTRY = {
-    "hacker_news": HackerNewsCollector,
     "github_trending": GitHubTrendingCollector,
+    "none": NoneCollector,
 }
 
 def get_collector(name: str) -> type[Collector]:

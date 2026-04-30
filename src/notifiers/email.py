@@ -1,17 +1,28 @@
 import smtplib
 import re
+import html
 from email.message import EmailMessage
 from .base import Notifier
 from ..logger import log
 
 
+URL_RE = re.compile(r"https?://[^\s<>'\"）)》】,，]+")
+
+
 def _url_to_link(text: str) -> str:
     """将纯文本 URL 转为可点击的 HTML 链接"""
-    return re.sub(
-        r'https?://[^\s）)》】】,，]+',
-        lambda m: f'<a href="{m.group(0)}" style="color:#2563eb;word-break:break-all">{m.group(0)}</a>',
-        text,
-    )
+    parts = []
+    pos = 0
+    for match in URL_RE.finditer(text):
+        url = match.group(0)
+        parts.append(html.escape(text[pos:match.start()]))
+        safe_url = html.escape(url, quote=True)
+        parts.append(
+            f'<a href="{safe_url}" style="color:#2563eb;word-break:break-all">{safe_url}</a>'
+        )
+        pos = match.end()
+    parts.append(html.escape(text[pos:]))
+    return "".join(parts)
 
 
 def _to_html(title: str, content: str) -> str:
@@ -26,9 +37,13 @@ def _to_html(title: str, content: str) -> str:
                 f'<p style="margin:10px 0 2px;font-size:15px;font-weight:bold;color:#111">'
                 f'{_url_to_link(stripped)}</p>'
             )
-        elif stripped.startswith("📡") or stripped == "---":
+        elif stripped == "---":
             lines.append(
                 f'<hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0">'
+            )
+        elif stripped.startswith("📡"):
+            lines.append(
+                f'<p style="margin:2px 0 10px;font-size:12px;color:#777">{_url_to_link(stripped)}</p>'
             )
         elif stripped.startswith("##"):
             # 小标题
@@ -52,7 +67,7 @@ def _to_html(title: str, content: str) -> str:
 <body style="margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f9fafb">
 <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
 <div style="border-bottom:2px solid #2563eb;padding-bottom:8px;margin-bottom:12px">
-<p style="margin:0;font-size:18px;font-weight:bold;color:#2563eb">{title}</p>
+<p style="margin:0;font-size:18px;font-weight:bold;color:#2563eb">{html.escape(title)}</p>
 </div>
 {body}
 <div style="border-top:1px solid #e5e7eb;margin-top:16px;padding-top:8px">

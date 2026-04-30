@@ -9,6 +9,7 @@ from .collectors import get_collector
 from .processors import get_processor
 from .notifiers import get_notifier
 from .notifiers.base import NotificationPartialFailure
+from .reports import report_archive
 from .storage import storage
 from .logger import log
 
@@ -17,9 +18,17 @@ shutdown_event = threading.Event()
 TIMEZONE = zoneinfo.ZoneInfo("Asia/Shanghai")
 
 
-def _execute_task(task_cfg: dict, ai_config: dict, notifier_configs: dict) -> str:
-    """执行任务核心逻辑（采集 → 处理 → 推送），返回摘要"""
+def _prepare_report(task_cfg: dict, ai_config: dict, record_id: int) -> tuple[str, list[dict], str]:
+    """Generate a report once per task record, or reuse an existing archived report."""
     name = task_cfg["name"]
+    existing_report_path = storage.get_report_path(record_id)
+    if report_archive.exists(existing_report_path):
+        result = report_archive.load(existing_report_path)
+        data = report_archive.load_items(existing_report_path)
+        log.info(f"  {name} 复用已生成报告: {existing_report_path}")
+        return result, data, existing_report_path
+    elif existing_report_path:
+        log.warning(f"  {name} 已记录报告路径但文件不存在，将重新生成: {existing_report_path}")
 
     collector_cls = get_collector(task_cfg["collector"])
     collector = collector_cls()
@@ -36,6 +45,18 @@ def _execute_task(task_cfg: dict, ai_config: dict, notifier_configs: dict) -> st
     result = processor.process(data, ai_config, params)
     log.info(f"  {name} 处理完成，共 {len(result)} 字")
 
+    report_path = report_archive.save(name, record_id, result, data)
+    storage.record_report(record_id, report_path)
+    log.info(f"  {name} 报告已归档: {report_path}")
+
+    return result, data, report_path
+
+
+def _execute_task(task_cfg: dict, ai_config: dict, notifier_configs: dict, record_id: int) -> str:
+    """执行任务核心逻辑（采集 → 处理 → 归档 → 推送），返回摘要"""
+    name = task_cfg["name"]
+    result, data, report_path = _prepare_report(task_cfg, ai_config, record_id)
+
     notifier_cls = get_notifier(task_cfg["notifier"])
     notifier = notifier_cls()
     notifier_cfg = notifier_configs.get(task_cfg["notifier"], {})
@@ -43,12 +64,13 @@ def _execute_task(task_cfg: dict, ai_config: dict, notifier_configs: dict) -> st
     if not ok:
         raise RuntimeError(f"通知器 {task_cfg['notifier']} 推送返回失败")
 
-    try:
-        storage.save_trend_items(name, data)
-    except Exception as e:
-        log.error(f"{name} 趋势历史保存失败，已跳过本次趋势入库: {e}")
+    if task_cfg.get("save_trends", True) and data:
+        try:
+            storage.save_trend_items(name, data)
+        except Exception as e:
+            log.error(f"{name} 趋势历史保存失败，已跳过本次趋势入库: {e}")
 
-    summary = f"✅ {name} · {len(data)}条数据 · {len(result)}字"
+    summary = f"✅ {name} · {len(data)}条数据 · {len(result)}字 · {report_path}"
     return summary
 
 
@@ -61,7 +83,7 @@ def run_task(task_cfg: dict, ai_config: dict, notifier_configs: dict):
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
         try:
-            summary = _execute_task(task_cfg, ai_config, notifier_configs)
+            summary = _execute_task(task_cfg, ai_config, notifier_configs, record_id)
             storage.record_success(record_id, summary)
             log.info(f"任务完成: {summary}")
             return

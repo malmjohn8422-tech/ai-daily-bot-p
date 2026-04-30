@@ -24,6 +24,7 @@ AI Daily Bot 是一个每日自动运行的简报机器人。每天定时采集 
 - **插件架构** — 采集器、处理器、通知器各自独立，加新数据源只需一个文件
 - **AI 摘要** — 调用大模型生成中文简报，含星级推荐和一句话亮点
 - **趋势雷达** — 对比 7 天历史数据，标记「新上榜」「连续在榜」「热度猛增」
+- **报告归档** — AI 输出保存为 Markdown，通知失败重试时复用报告，避免重复调用模型
 - **多端推送** — 支持邮件 / Telegram，一个任务可配多个通知器
 - **定时调度** — APScheduler 驱动，cron 表达式精确到分钟，默认北京时间
 - **自动重试** — 采集或 AI 调用失败时自动重试最多 3 次（指数退避）
@@ -81,6 +82,13 @@ docker compose up -d
 docker compose logs -f
 ```
 
+### 运行测试
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
 ## 配置说明
 
 ### 环境变量 (`.env`)
@@ -110,6 +118,15 @@ tasks:
       language: ""              # 空 = 全部语言
       since: "daily"
       max_articles: 10
+
+  - name: "📊 GitHub 一周趋势总结"
+    schedule: "0 9 * * 0"       # 每周日早上 9 点（北京时间）
+    collector: "none"           # 只读取历史数据，不重新采集
+    processor: "weekly"
+    notifier: "email"
+    save_trends: false
+    params:
+      task_name: "🐙 GitHub 开源早报"
 ```
 
 ## 项目结构
@@ -118,9 +135,11 @@ tasks:
 ├── src/
 │   ├── collectors/        # 采集器插件
 │   │   ├── github_trending.py
-│   │   └── hacker_news.py
+│   │   ├── hacker_news.py
+│   │   └── none.py
 │   ├── processors/        # 处理器插件
-│   │   └── summarizer.py
+│   │   ├── summarizer.py
+│   │   └── weekly.py
 │   ├── notifiers/         # 通知器插件
 │   │   ├── telegram.py
 │   │   └── email.py
@@ -131,6 +150,7 @@ tasks:
 │   ├── logger.py          # 日志模块
 │   └── retry.py           # 重试工具
 ├── config.yaml            # 任务配置
+├── reports/               # 自动生成的 Markdown 报告（不入库）
 ├── docker-compose.yml     # Docker 部署
 └── .env                   # 密钥（不入库）
 ```

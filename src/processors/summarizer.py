@@ -1,7 +1,6 @@
 import httpx
 from .base import Processor
 from ..logger import log
-from ..retry import retry
 
 
 class SummarizerProcessor(Processor):
@@ -69,7 +68,6 @@ class SummarizerProcessor(Processor):
 
         return self._call_ai(prompt, ai_config, data)
 
-    @retry(max_attempts=3, delay=2, backoff=2)
     def _call_ai(self, prompt: str, ai_config: dict, data: list[dict]) -> str:
         payload = {
             "model": ai_config.get("model", "gpt-4o"),
