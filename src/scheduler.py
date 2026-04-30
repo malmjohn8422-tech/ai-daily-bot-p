@@ -101,6 +101,14 @@ def run_task(task_cfg: dict, ai_config: dict, notifier_configs: dict):
                 storage.record_failure(record_id, str(e))
 
 
+def run_once(tasks: list[dict], ai_config: dict, notifier_configs: dict):
+    """Run all tasks immediately and exit. Used for CI / --once mode."""
+    log.info("一次性模式：执行所有任务...")
+    for task_cfg in tasks:
+        run_task(task_cfg, ai_config, notifier_configs)
+    log.info("所有任务执行完毕")
+
+
 def start(tasks: list[dict], ai_config: dict, notifier_configs: dict):
     """启动调度器"""
     scheduler = BackgroundScheduler()

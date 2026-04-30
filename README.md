@@ -2,6 +2,7 @@
   <img src="https://img.shields.io/badge/Python-3.12-blue?style=flat-square&logo=python" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/docker-ready-2496ED?style=flat-square&logo=docker" alt="Docker">
+  <img src="https://github.com/malmjohn8422-tech/ai-daily-bot-p/actions/workflows/daily-bot.yml/badge.svg" alt="CI">
 </p>
 
 <h1 align="center">AI Daily Bot 📬</h1>
@@ -82,6 +83,24 @@ docker compose up -d
 docker compose logs -f
 ```
 
+### 方式三：GitHub Actions（零成本 CI）
+
+适合不想管服务器的场景。每天北京时间 08:00 自动运行，无需 VPS，无需保持终端。
+
+```bash
+# 1. 把项目推送到 GitHub
+# 2. 在 GitHub 仓库 → Settings → Secrets and variables → Actions 添加以下密钥：
+#    AI_API_BASE    — AI API 地址
+#    AI_API_KEY     — API Key
+#    AI_MODEL       — 模型名
+#    EMAIL_USERNAME — Gmail 地址（不用邮件可不填）
+#    EMAIL_PASSWORD — Gmail 应用专用密码
+#    EMAIL_RECIPIENT— 接收邮箱
+# 3. 启用 GitHub Actions，每天自动运行
+```
+
+也可在仓库 Actions 页面手动触发运行。
+
 ### 运行测试
 
 ```bash
@@ -135,7 +154,6 @@ tasks:
 ├── src/
 │   ├── collectors/        # 采集器插件
 │   │   ├── github_trending.py
-│   │   ├── hacker_news.py
 │   │   └── none.py
 │   ├── processors/        # 处理器插件
 │   │   ├── summarizer.py
@@ -147,10 +165,18 @@ tasks:
 │   │   └── sqlite.py
 │   ├── scheduler.py       # 任务调度器
 │   ├── main.py            # 入口 + 配置校验
+│   ├── reports.py         # 报告归档（原子写入、JSON 元数据）
 │   ├── logger.py          # 日志模块
 │   └── retry.py           # 重试工具
+├── .github/workflows/     # GitHub Actions 自动调度
+│   └── daily-bot.yml
+├── tests/                 # 最小测试（配置校验、通知器、调度器）
+│   ├── test_config.py
+│   ├── test_notifiers.py
+│   └── test_scheduler.py
 ├── config.yaml            # 任务配置
 ├── reports/               # 自动生成的 Markdown 报告（不入库）
+├── requirements-dev.txt   # 开发依赖（pytest）
 ├── docker-compose.yml     # Docker 部署
 └── .env                   # 密钥（不入库）
 ```

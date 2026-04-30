@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """AI Daily Bot - 入口"""
 
+import argparse
 import os
 import sys
 import re
@@ -162,7 +163,14 @@ def validate_config(cfg: dict):
         sys.exit(1)
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="AI Daily Bot")
+    parser.add_argument("--once", action="store_true", help="立即执行所有任务后退出（CI 模式）")
+    return parser.parse_args()
+
+
 def main():
+    args = _parse_args()
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     os.chdir(project_root)
 
@@ -192,9 +200,12 @@ def main():
         print("⚠️  配置中没有任务，请在 config.yaml 中添加 tasks")
         sys.exit(0)
 
-    # 启动调度器
-    from .scheduler import start
-    start(tasks, ai_config, notifier_configs)
+    if args.once:
+        from .scheduler import run_once
+        run_once(tasks, ai_config, notifier_configs)
+    else:
+        from .scheduler import start
+        start(tasks, ai_config, notifier_configs)
 
 
 if __name__ == "__main__":

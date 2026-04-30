@@ -1,0 +1,52 @@
+name: Daily Bot
+
+on:
+  schedule:
+    # 北京时间每天 08:00（UTC 00:00）执行每日任务
+    - cron: '0 0 * * *'
+  workflow_dispatch:   # 支持手动触发
+
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache SQLite data for trend persistence
+        uses: actions/cache@v4
+        with:
+          path: data/
+          key: bot-data-${{ github.run_id }}
+          restore-keys: bot-data-
+
+      - name: Install dependencies
+        run: pip install -q -r requirements.txt
+
+      - name: Configure environment
+        run: |
+          cat > .env << 'EOF'
+          AI_API_BASE=${{ secrets.AI_API_BASE }}
+          AI_API_KEY=${{ secrets.AI_API_KEY }}
+          AI_MODEL=${{ secrets.AI_MODEL }}
+          TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USERNAME=${{ secrets.EMAIL_USERNAME }}
+          EMAIL_PASSWORD=${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECIPIENT=${{ secrets.EMAIL_RECIPIENT }}
+          EOF
+
+      - name: Run bot
+        run: python -m src.main --once
+
+      - name: Upload reports as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: reports/
