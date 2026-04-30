@@ -42,7 +42,7 @@ jobs:
           EOF
 
       - name: Run bot
-        run: python -m src.main --once
+        run: python -m src.main --once --task "🐙 GitHub 开源早报"
 
       - name: Upload reports as artifacts
         if: always()

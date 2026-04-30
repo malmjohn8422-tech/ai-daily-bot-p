@@ -165,7 +165,8 @@ def validate_config(cfg: dict):
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="AI Daily Bot")
-    parser.add_argument("--once", action="store_true", help="立即执行所有任务后退出（CI 模式）")
+    parser.add_argument("--once", action="store_true", help="立即执行任务后退出（CI 模式）")
+    parser.add_argument("--task", action="append", help="指定要运行的任务名（可重复），默认全部")
     return parser.parse_args()
 
 
@@ -202,7 +203,7 @@ def main():
 
     if args.once:
         from .scheduler import run_once
-        run_once(tasks, ai_config, notifier_configs)
+        run_once(tasks, ai_config, notifier_configs, task_names=args.task)
     else:
         from .scheduler import start
         start(tasks, ai_config, notifier_configs)

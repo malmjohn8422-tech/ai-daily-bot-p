@@ -2,6 +2,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from time import sleep
 import signal
+import sys
 import threading
 import zoneinfo
 
@@ -74,8 +75,8 @@ def _execute_task(task_cfg: dict, ai_config: dict, notifier_configs: dict, recor
     return summary
 
 
-def run_task(task_cfg: dict, ai_config: dict, notifier_configs: dict):
-    """执行一个任务实例（带自动重试）"""
+def run_task(task_cfg: dict, ai_config: dict, notifier_configs: dict) -> bool:
+    """执行一个任务实例（带自动重试），返回是否成功。"""
     name = task_cfg["name"]
     log.info(f"开始任务: {name}")
     record_id = storage.record_start(name)
@@ -86,11 +87,11 @@ def run_task(task_cfg: dict, ai_config: dict, notifier_configs: dict):
             summary = _execute_task(task_cfg, ai_config, notifier_configs, record_id)
             storage.record_success(record_id, summary)
             log.info(f"任务完成: {summary}")
-            return
+            return True
         except NotificationPartialFailure as e:
             log.error(f"任务部分推送失败，不再重试以避免重复推送: {name} - {e}")
             storage.record_failure(record_id, str(e))
-            return
+            return False
         except Exception as e:
             if attempt < max_attempts:
                 wait = 2 * (2 ** (attempt - 1))
@@ -99,13 +100,27 @@ def run_task(task_cfg: dict, ai_config: dict, notifier_configs: dict):
             else:
                 log.error(f"任务失败: {name} - {e}")
                 storage.record_failure(record_id, str(e))
+                return False
 
 
-def run_once(tasks: list[dict], ai_config: dict, notifier_configs: dict):
-    """Run all tasks immediately and exit. Used for CI / --once mode."""
+def run_once(tasks: list[dict], ai_config: dict, notifier_configs: dict, task_names: list[str] | None = None):
+    """Run specified tasks immediately and exit. Used for CI / --once mode."""
+    if task_names:
+        filtered = [t for t in tasks if t.get("name") in task_names]
+        if not filtered:
+            log.error(f"未找到匹配的任务: {task_names}")
+            sys.exit(1)
+        tasks = filtered
+
     log.info("一次性模式：执行所有任务...")
+    any_failed = False
     for task_cfg in tasks:
-        run_task(task_cfg, ai_config, notifier_configs)
+        if not run_task(task_cfg, ai_config, notifier_configs):
+            any_failed = True
+
+    if any_failed:
+        log.error("部分任务失败，退出码 1")
+        sys.exit(1)
     log.info("所有任务执行完毕")
 
 
