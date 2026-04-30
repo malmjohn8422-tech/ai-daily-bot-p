@@ -33,7 +33,7 @@ class SummarizerProcessor(Processor):
 
         trend = (params or {}).get("_trend_history")
         trend_section = ""
-        trend_requirement = "6. 如果没有趋势历史数据，不要编造「连续在榜」「星级猛增」等趋势标签。"
+        trend_requirement = "7. 如果没有趋势历史数据，不要编造「连续在榜」「星级猛增」等趋势标签。"
         if trend:
             trend_lines = ["## 近期趋势历史"]
             for date in sorted(trend.keys(), reverse=True):
@@ -43,7 +43,7 @@ class SummarizerProcessor(Processor):
                 ]
                 trend_lines.append(f"{date}:\n" + "\n".join(titles))
             trend_section = "\n\n" + "\n".join(trend_lines)
-            trend_requirement = """6. 根据趋势历史分析今日项目相比历史的变化：
+            trend_requirement = """7. 根据趋势历史分析今日项目相比历史的变化：
    - 标出「新上榜」「连续 X 天在榜」「热度猛增」等标签
    - 对持续多日上榜的项目说明热度变化趋势
    - 在今日小结中增加一段趋势解读"""
@@ -60,7 +60,8 @@ class SummarizerProcessor(Processor):
    - ★★★☆☆ = 可看可不看
    - ★★☆☆☆ = 有亮点但没什么看的必要
    - ★☆☆☆☆ = 不推荐
-5. 末尾给出今日小结
+5. **请识别出明显异常的刷量项目（描述空洞但星级异常高、Fork/Star 比例严重失调等），直接给★☆☆☆☆并标注「疑似刷量」**
+6. 末尾给出今日小结
 {trend_requirement}{trend_section}
 
 原始内容：

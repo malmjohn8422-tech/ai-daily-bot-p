@@ -1,8 +1,10 @@
 from .base import Processor
 from .summarizer import SummarizerProcessor
+from .weekly import WeeklySummarizerProcessor
 
 REGISTRY = {
     "summarizer": SummarizerProcessor,
+    "weekly": WeeklySummarizerProcessor,
 }
 
 def get_processor(name: str) -> type[Processor]:

@@ -26,3 +26,13 @@ tasks:
       language: ""
       since: "daily"
       max_articles: 10
+  - name: "📊 GitHub 一周趋势总结"
+    schedule: "0 9 * * 0"
+    collector: "github_trending"
+    processor: "weekly"
+    notifier: "email"
+    params:
+      language: ""
+      since: "daily"
+      max_articles: 25
+      task_name: "🐙 GitHub 开源早报"
