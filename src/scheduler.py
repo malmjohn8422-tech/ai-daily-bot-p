@@ -112,7 +112,8 @@ def run_once(tasks: list[dict], ai_config: dict, notifier_configs: dict, task_na
             sys.exit(1)
         tasks = filtered
 
-    log.info("一次性模式：执行所有任务...")
+    task_names_str = ", ".join(t["name"] for t in tasks)
+    log.info(f"一次性模式：执行任务 [{task_names_str}]")
     any_failed = False
     for task_cfg in tasks:
         if not run_task(task_cfg, ai_config, notifier_configs):
