@@ -1,0 +1,12 @@
+services:
+  ai-daily-bot:
+    build: .
+    container_name: ai-daily-bot
+    restart: always
+    environment:
+      - TZ=Asia/Shanghai
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs

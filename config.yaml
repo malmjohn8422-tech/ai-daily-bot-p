@@ -1,0 +1,28 @@
+# AI-Daily-Bot 配置文件
+
+ai:
+  api_base: ${AI_API_BASE}
+  api_key: ${AI_API_KEY}
+  model: ${AI_MODEL}
+
+notifiers:
+  telegram:
+    bot_token: ${TELEGRAM_BOT_TOKEN}
+    chat_id: ${TELEGRAM_CHAT_ID}
+  email:
+    smtp_server: smtp.gmail.com
+    smtp_port: 587
+    username: ${EMAIL_USERNAME}
+    password: ${EMAIL_PASSWORD}
+    recipient: ${EMAIL_RECIPIENT}
+
+tasks:
+  - name: "🐙 GitHub 开源早报"
+    schedule: "0 8 * * *"
+    collector: "github_trending"
+    processor: "summarizer"
+    notifier: "email"
+    params:
+      language: ""
+      since: "daily"
+      max_articles: 10

@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""AI Daily Bot - 入口"""
+
+import os
+import sys
+import re
+import yaml
+from dotenv import load_dotenv
+
+from .collectors import REGISTRY as COLLECTOR_REGISTRY
+from .processors import REGISTRY as PROCESSOR_REGISTRY
+from .notifiers import REGISTRY as NOTIFIER_REGISTRY
+
+
+def _ensure_utf8_output():
+    """Avoid UnicodeEncodeError when Windows consoles default to a legacy code page."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
+_ensure_utf8_output()
+
+
+def load_config(path: str) -> dict:
+    """加载 yaml 配置，并解析其中的 ${ENV_VAR} 占位符"""
+    with open(path, encoding="utf-8") as f:
+        raw = f.read()
+
+    def replace_env(match):
+        var = match.group(1)
+        return os.environ.get(var, match.group(0))
+
+    raw = re.sub(r'\$\{(\w+)\}', replace_env, raw)
+    return yaml.safe_load(raw)
+
+
+def _find_unresolved(obj, path: str) -> list[str]:
+    """递归检查配置中是否有未解析的 ${VAR} 占位符"""
+    errs = []
+    if isinstance(obj, str):
+        if "${" in obj:
+            errs.append(f"{path} 中环境变量未设置: {obj}")
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            errs.extend(_find_unresolved(v, f"{path}.{k}"))
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            errs.extend(_find_unresolved(v, f"{path}[{i}]"))
+    return errs
+
+
+def validate_config(cfg: dict):
+    """校验配置完整性，有问题则打印错误并退出"""
+    errors = []
+
+    if not isinstance(cfg, dict):
+        errors.append("配置文件必须是 YAML 对象")
+        cfg = {}
+
+    # 检查未解析的环境变量
+    errors.extend(_find_unresolved(cfg, "config"))
+
+    ai_cfg = cfg.get("ai")
+    if "ai" not in cfg:
+        errors.append("配置缺少 ai 字段")
+    elif not isinstance(ai_cfg, dict):
+        errors.append("ai 配置必须是对象")
+    elif not ai_cfg.get("api_base"):
+        errors.append("ai 配置缺少 api_base")
+    elif not ai_cfg.get("model"):
+        errors.append("ai 配置缺少 model")
+
+    notifier_configs = cfg.get("notifiers", {}) or {}
+    if not isinstance(notifier_configs, dict):
+        errors.append("notifiers 配置必须是对象")
+        notifier_configs = {}
+
+    tasks = cfg.get("tasks", []) or []
+    if not isinstance(tasks, list):
+        errors.append("tasks 配置必须是列表")
+        tasks = []
+
+    if not tasks:
+        errors.append("配置中没有任务")
+
+    for i, task in enumerate(tasks):
+        prefix = f"  tasks[{i}]"
+        if not isinstance(task, dict):
+            errors.append(f"{prefix} 必须是对象")
+            continue
+
+        name = task.get("name")
+        if not name:
+            errors.append(f"{prefix} 缺少 name")
+
+        if not task.get("schedule"):
+            errors.append(f"{prefix} [{name}] 缺少 schedule")
+
+        collector = task.get("collector")
+        if not collector:
+            errors.append(f"{prefix} [{name}] 缺少 collector")
+        elif collector not in COLLECTOR_REGISTRY:
+            errors.append(f"{prefix} [{name}] 未知采集器 '{collector}'，可选: {list(COLLECTOR_REGISTRY.keys())}")
+
+        processor = task.get("processor")
+        if not processor:
+            errors.append(f"{prefix} [{name}] 缺少 processor")
+        elif processor not in PROCESSOR_REGISTRY:
+            errors.append(f"{prefix} [{name}] 未知处理器 '{processor}'，可选: {list(PROCESSOR_REGISTRY.keys())}")
+
+        notifier_name = task.get("notifier")
+        if not notifier_name:
+            errors.append(f"{prefix} [{name}] 缺少 notifier")
+        elif notifier_name not in NOTIFIER_REGISTRY:
+            errors.append(f"{prefix} [{name}] 未知通知器 '{notifier_name}'，可选: {list(NOTIFIER_REGISTRY.keys())}")
+        elif notifier_name not in notifier_configs:
+            errors.append(f"{prefix} [{name}] 未找到通知器 '{notifier_name}' 的配置")
+        elif notifier_name == "telegram":
+            telegram_cfg = notifier_configs.get("telegram") or {}
+            if not telegram_cfg.get("bot_token"):
+                errors.append(f"{prefix} [{name}] telegram 配置缺少 bot_token")
+            if not telegram_cfg.get("chat_id"):
+                errors.append(f"{prefix} [{name}] telegram 配置缺少 chat_id")
+
+        # 校验 cron 表达式（使用东八区）
+        if task.get("schedule"):
+            try:
+                from zoneinfo import ZoneInfo
+                from apscheduler.triggers.cron import CronTrigger
+                CronTrigger.from_crontab(task["schedule"], timezone=ZoneInfo("Asia/Shanghai"))
+            except (ValueError, TypeError) as e:
+                errors.append(f"{prefix} [{name}] 无效的 cron 表达式 '{task['schedule']}': {e}")
+
+    if errors:
+        print("配置校验失败:")
+        for e in errors:
+            print(f"  ❌ {e}")
+        sys.exit(1)
+
+
+def main():
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    os.chdir(project_root)
+
+    # 加载 .env
+    dotenv_path = os.path.join(project_root, ".env")
+    if os.path.exists(dotenv_path):
+        load_dotenv(dotenv_path)
+    else:
+        print("⚠️  未找到 .env 文件，请从 .env.example 复制并填写")
+
+    # 加载配置
+    config_path = os.path.join(project_root, "config.yaml")
+    if not os.path.exists(config_path):
+        print(f"❌ 未找到配置文件: {config_path}")
+        sys.exit(1)
+
+    cfg = load_config(config_path)
+
+    # 校验配置
+    validate_config(cfg)
+
+    ai_config = cfg["ai"]
+    notifier_configs = cfg.get("notifiers", {})
+    tasks = cfg.get("tasks", [])
+
+    if not tasks:
+        print("⚠️  配置中没有任务，请在 config.yaml 中添加 tasks")
+        sys.exit(0)
+
+    # 启动调度器
+    from .scheduler import start
+    start(tasks, ai_config, notifier_configs)
+
+
+if __name__ == "__main__":
+    main()
