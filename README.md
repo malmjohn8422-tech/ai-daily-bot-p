@@ -32,13 +32,13 @@ AI Daily Bot 是一个每日自动运行的简报机器人。每天定时采集 
 
 ## 快速开始
 
-### 前置条件
+本项目支持两种运行方式：
 
-- Python 3.12+
-- 一个 AI API（兼容 OpenAI 格式）
-- 用于推送的邮箱或 Telegram Bot
+> 💡 **第一次上手**建议先走本地方式，调试方便。配好之后可以一直保持本地运行，不强制用 Docker。
 
-### 安装
+### 方式一：本地运行（开发调试用）
+
+需要 Python 3.12+ 环境。
 
 ```bash
 # 克隆项目
@@ -50,19 +50,35 @@ pip install -r requirements.txt
 
 # 配置环境变量
 cp .env.example .env
-# 编辑 .env，填入你的 API Key、邮箱 SMTP 密码等
+# 然后用文本编辑器打开 .env，填上你的 API Key、邮箱密码等
 ```
 
-### 运行
+环境变量配好后运行：
 
 ```bash
 python -m src.main
 ```
 
-### Docker 部署
+终端会显示调度器已启动，到了设定的时间就会自动执行任务。
+
+### 方式二：Docker 部署（VPS 长期运行用）
+
+适合部署到云服务器上 7×24 小时跑，不用保持终端开着。需要先在机器上安装 Docker 和 Docker Compose。
 
 ```bash
+# 克隆项目
+git clone https://github.com/malmjohn8422-tech/ai-daily-bot
+cd ai-daily-bot
+
+# 配置环境变量
+cp .env.example .env
+# 编辑 .env，填入你的 API Key、邮箱密码等
+
+# 启动（后台运行）
 docker compose up -d
+
+# 查看运行状态
+docker compose logs -f
 ```
 
 ## 配置说明
