@@ -44,8 +44,8 @@ AI Daily Bot 是一个每日自动运行的简报机器人。每天定时采集 
 
 ```bash
 # 克隆项目
-git clone https://github.com/malmjohn8422-tech/ai-daily-bot
-cd ai-daily-bot
+git clone https://github.com/malmjohn8422-tech/ai-daily-bot-p
+cd ai-daily-bot-p
 
 # 安装依赖
 pip install -r requirements.txt
@@ -69,8 +69,8 @@ python -m src.main
 
 ```bash
 # 克隆项目
-git clone https://github.com/malmjohn8422-tech/ai-daily-bot
-cd ai-daily-bot
+git clone https://github.com/malmjohn8422-tech/ai-daily-bot-p
+cd ai-daily-bot-p
 
 # 配置环境变量
 cp .env.example .env
@@ -85,7 +85,9 @@ docker compose logs -f
 
 ### 方式三：GitHub Actions（零成本 CI）
 
-适合不想管服务器的场景。每天北京时间 08:00 自动运行，无需 VPS，无需保持终端。
+适合不想管服务器的场景。当前 workflow 配置为每天北京时间 08:17 自动运行，无需 VPS，无需保持终端。
+
+> 注意：GitHub Actions 的 `schedule` 触发是 best-effort，不保证严格准点；平台高负载时可能延迟，极端情况下可能跳过某次定时触发。如果简报必须每天稳定送达，建议使用 VPS/Docker 长期运行，或用外部 cron 服务触发 GitHub Actions。
 
 ```bash
 # 1. 把项目推送到 GitHub
@@ -93,13 +95,15 @@ docker compose logs -f
 #    AI_API_BASE    — AI API 地址
 #    AI_API_KEY     — API Key
 #    AI_MODEL       — 模型名
-#    EMAIL_USERNAME — Gmail 地址（不用邮件可不填）
+#    EMAIL_USERNAME — Gmail 地址（当前默认任务使用邮件，必填）
 #    EMAIL_PASSWORD — Gmail 应用专用密码
 #    EMAIL_RECIPIENT— 接收邮箱
-# 3. 启用 GitHub Actions，每天自动运行
+#    TELEGRAM_BOT_TOKEN — Telegram Bot Token（仅当任务 notifier 改为 telegram 时需要）
+#    TELEGRAM_CHAT_ID   — Telegram Chat ID（仅当任务 notifier 改为 telegram 时需要）
+# 3. 启用 GitHub Actions，等待定时运行，或在 Actions 页面手动触发
 ```
 
-也可在仓库 Actions 页面手动触发运行。
+也可在仓库 Actions 页面手动触发运行。手动触发成功只能证明代码、Secrets 和推送通道可用；如果定时运行没有出现记录，通常是 GitHub schedule 触发本身没有执行，而不是程序失败。
 
 ### 运行测试
 
@@ -122,6 +126,10 @@ AI_MODEL=gpt-5.5
 EMAIL_USERNAME=your@gmail.com
 EMAIL_PASSWORD=your-app-password
 EMAIL_RECIPIENT=you@domain.com
+
+# Telegram 推送（可选；仅当任务 notifier: "telegram" 时需要）
+TELEGRAM_BOT_TOKEN=123456:abc
+TELEGRAM_CHAT_ID=123456789
 ```
 
 ### 任务配置 (`config.yaml`)
@@ -129,7 +137,7 @@ EMAIL_RECIPIENT=you@domain.com
 ```yaml
 tasks:
   - name: "🐙 GitHub 开源早报"
-    schedule: "0 8 * * *"       # 每天早上 8 点（北京时间）
+    schedule: "0 8 * * *"       # 本地/Docker 模式：每天早上 8 点（北京时间）
     collector: "github_trending"
     processor: "summarizer"
     notifier: "email"
