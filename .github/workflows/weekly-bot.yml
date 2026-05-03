@@ -1,10 +1,10 @@
-name: Daily Bot
+name: Weekly Bot
 
 on:
   schedule:
-    # UTC 20:17（北京时间 04:17），预计延迟 3-4 小时后在北京时间上午 8 点左右收到
-    - cron: '17 20 * * *'
-  workflow_dispatch:   # 支持手动触发
+    # UTC 01:17（北京时间 09:17），预计延迟后在北京时间中午前收到
+    - cron: '17 1 * * 0'
+  workflow_dispatch:
 
 jobs:
   bot:
@@ -41,8 +41,8 @@ jobs:
           EMAIL_RECIPIENT=${{ secrets.EMAIL_RECIPIENT }}
           EOF
 
-      - name: Run bot
-        run: python -m src.main --once --task "🐙 GitHub 开源早报"
+      - name: Run weekly bot
+        run: python -m src.main --once --task "📊 GitHub 一周趋势总结"
 
       - name: Upload reports as artifacts
         if: always()
