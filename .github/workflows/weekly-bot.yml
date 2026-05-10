@@ -2,8 +2,8 @@ name: Weekly Bot
 
 on:
   schedule:
-    # UTC 01:17（北京时间 09:17），预计延迟后在北京时间中午前收到
-    - cron: '17 1 * * 0'
+    # UTC 周六 18:17（北京时间周日 02:17），预计延迟后在北京时间周日早上 6 点左右收到
+    - cron: '17 18 * * 6'
   workflow_dispatch:
 
 jobs:
@@ -39,10 +39,12 @@ jobs:
           EMAIL_USERNAME=${{ secrets.EMAIL_USERNAME }}
           EMAIL_PASSWORD=${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECIPIENT=${{ secrets.EMAIL_RECIPIENT }}
+          GITHUB_TOKEN=${{ github.token }}
+          PRODUCT_HUNT_TOKEN=${{ secrets.PRODUCT_HUNT_TOKEN }}
           EOF
 
       - name: Run weekly bot
-        run: python -m src.main --once --task "📊 GitHub 一周趋势总结"
+        run: python -m src.main --once --task "📊 AI 技术雷达周报"
 
       - name: Upload reports as artifacts
         if: always()

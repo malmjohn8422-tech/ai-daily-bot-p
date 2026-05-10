@@ -16,14 +16,16 @@
 
 ## 简介
 
-AI Daily Bot 是一个每日自动运行的简报机器人。每天定时采集 GitHub Trending 热门项目，交给 AI 生成带星级推荐的中文简报，并通过邮件或 Telegram 推送到你手机上。
+AI Daily Bot 是一个每日自动运行的简报机器人。每天定时采集 GitHub Trending、Hacker News、arXiv、Hugging Face、Product Hunt、Dev.to 等热点来源，交给 AI 按你的兴趣打分过滤，生成中文简报，并通过邮件或 Telegram 推送到你手机上。
 
 内置 **趋势雷达** 模块，自动对比过去 7 天的数据，识别哪些项目是新上榜、哪些持续升温，让你不错过任何一个值得关注的方向。
 
 ## 功能特性
 
 - **插件架构** — 采集器、处理器、通知器各自独立，加新数据源只需一个文件
-- **AI 摘要** — 调用大模型生成中文简报，含星级推荐和一句话亮点
+- **多来源采集** — 单个任务可同时聚合 GitHub Trending、Hacker News、arXiv、Hugging Face、Product Hunt、Dev.to 等来源
+- **AI 评分过滤** — 按兴趣偏好给内容打分，只展开真正值得看的条目
+- **AI 摘要** — 调用大模型生成中文简报，含推荐理由和一句话亮点
 - **趋势雷达** — 对比 7 天历史数据，标记「新上榜」「连续在榜」「热度猛增」
 - **报告归档** — AI 输出保存为 Markdown，通知失败重试时复用报告，避免重复调用模型
 - **多端推送** — 支持邮件 / Telegram，每个任务可配一个通知器
@@ -85,7 +87,7 @@ docker compose logs -f
 
 ### 方式三：GitHub Actions（零成本 CI）
 
-适合不想管服务器的场景。当前 workflow 配置为每天北京时间 08:17 自动运行，无需 VPS，无需保持终端。
+适合不想管服务器的场景。当前 workflow 配置为预计每天北京时间 06:00 左右运行，无需 VPS，无需保持终端。
 
 > 注意：GitHub Actions 的 `schedule` 触发是 best-effort，不保证严格准点；平台高负载时可能延迟，极端情况下可能跳过某次定时触发。如果简报必须每天稳定送达，建议使用 VPS/Docker 长期运行，或用外部 cron 服务触发 GitHub Actions。
 
@@ -130,40 +132,95 @@ EMAIL_RECIPIENT=you@domain.com
 # Telegram 推送（可选；仅当任务 notifier: "telegram" 时需要）
 TELEGRAM_BOT_TOKEN=123456:abc
 TELEGRAM_CHAT_ID=123456789
+
+# GitHub API（可选；用于提高仓库详情抓取额度）
+GITHUB_TOKEN=ghp_xxxxx
+
+# Product Hunt API（可选；未设置时会跳过 Product Hunt 来源）
+PRODUCT_HUNT_TOKEN=xxxxx
 ```
 
 ### 任务配置 (`config.yaml`)
 
 ```yaml
 tasks:
-  - name: "🐙 GitHub 开源早报"
-    schedule: "0 8 * * *"       # 本地/Docker 模式：每天早上 8 点（北京时间）
-    collector: "github_trending"
-    processor: "summarizer"
+  - name: "🧭 AI 技术雷达日报"
+    schedule: "0 6 * * *"       # 本地/Docker 模式：每天早上 6 点（北京时间）
+    sources:
+      - collector: "github_trending"
+        params:
+          language: ""           # 空 = 全部语言
+          since: "daily"
+          max_articles: 10
+          enrich_details: true   # 额外抓取仓库详情，提升判断准确性
+      - collector: "hacker_news"
+        params:
+          query: "AI OR LLM OR agent OR Python"
+          max_articles: 10
+      - collector: "arxiv"
+        params:
+          query: "cat:cs.AI OR cat:cs.CL OR cat:cs.LG"
+          max_articles: 8
+      - collector: "hugging_face"
+        params:
+          repo_type: "models"
+          search: "agent"
+          sort: "downloads"
+          direction: "-1"
+          max_articles: 8
+      - collector: "product_hunt"
+        params:
+          max_articles: 8
+      - collector: "dev_to"
+        params:
+          tag: "ai"
+          top: 7
+          max_articles: 8
+    processor: "scored_summarizer"
     notifier: "email"
     params:
-      language: ""              # 空 = 全部语言
-      since: "daily"
-      max_articles: 10
+      max_items: 40              # 最多送入 AI 评分的条目数，控制成本和上下文长度
+      preferences:
+        min_score: 7
+        interests:
+          - "AI and LLM applications"
+          - "developer tools"
+          - "automation and agents"
+          - "high-quality technology"
+          - "strong community discussion"
+          - "fast-growing projects"
+        exclude:
+          - "NFT"
+          - "pure marketing"
 
-  - name: "📊 GitHub 一周趋势总结"
-    schedule: "0 9 * * 0"       # 每周日早上 9 点（北京时间）
+  - name: "📊 AI 技术雷达周报"
+    schedule: "0 6 * * 0"       # 每周日早上 6 点（北京时间）
     collector: "none"           # 只读取历史数据，不重新采集
     processor: "weekly"
     notifier: "email"
     save_trends: false
     params:
-      task_name: "🐙 GitHub 开源早报"
+      task_name: "🧭 AI 技术雷达日报"
+      history_aliases:
+        - "🐙 GitHub 开源早报"
 ```
+
+`sources` 中的单个来源可以加 `required: true`。默认不设置时，某个来源临时失败会被跳过，不影响整份日报发送；设置为 `true` 后，该来源失败会让任务失败并进入重试。
 
 ## 项目结构
 
 ```
 ├── src/
 │   ├── collectors/        # 采集器插件
+│   │   ├── arxiv.py
+│   │   ├── dev_to.py
 │   │   ├── github_trending.py
+│   │   ├── hacker_news.py
+│   │   ├── hugging_face.py
+│   │   ├── product_hunt.py
 │   │   └── none.py
 │   ├── processors/        # 处理器插件
+│   │   ├── scored_summarizer.py
 │   │   ├── summarizer.py
 │   │   └── weekly.py
 │   ├── notifiers/         # 通知器插件

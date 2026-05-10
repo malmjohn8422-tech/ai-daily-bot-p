@@ -17,17 +17,58 @@ notifiers:
     recipient: ${EMAIL_RECIPIENT}
 
 tasks:
-  - name: "🐙 GitHub 开源早报"
-    schedule: "0 8 * * *"
-    collector: "github_trending"
-    processor: "summarizer"
+  - name: "🧭 AI 技术雷达日报"
+    schedule: "0 6 * * *"
+    sources:
+      - collector: "github_trending"
+        params:
+          language: ""
+          since: "daily"
+          max_articles: 10
+          enrich_details: true
+      - collector: "hacker_news"
+        params:
+          query: "AI OR LLM OR agent OR Python"
+          max_articles: 10
+      - collector: "arxiv"
+        params:
+          query: "cat:cs.AI OR cat:cs.CL OR cat:cs.LG"
+          max_articles: 8
+      - collector: "hugging_face"
+        params:
+          repo_type: "models"
+          search: "agent"
+          sort: "downloads"
+          direction: "-1"
+          max_articles: 8
+      - collector: "product_hunt"
+        params:
+          max_articles: 8
+      - collector: "dev_to"
+        params:
+          tag: "ai"
+          top: 7
+          max_articles: 8
+    processor: "scored_summarizer"
     notifier: "email"
     params:
-      language: ""
-      since: "daily"
-      max_articles: 10
-  - name: "📊 GitHub 一周趋势总结"
-    schedule: "0 9 * * 0"
+      max_items: 40
+      preferences:
+        min_score: 7
+        interests:
+          - "AI and LLM applications"
+          - "developer tools"
+          - "automation and agents"
+          - "high-quality technology"
+          - "strong community discussion"
+          - "fast-growing projects"
+          - "important research or product launches"
+        exclude:
+          - "NFT"
+          - "pure marketing"
+          - "low-signal launch posts"
+  - name: "📊 AI 技术雷达周报"
+    schedule: "0 6 * * 0"
     collector: "none"
     processor: "weekly"
     notifier: "email"
@@ -36,4 +77,6 @@ tasks:
       language: ""
       since: "daily"
       max_articles: 25
-      task_name: "🐙 GitHub 开源早报"
+      task_name: "🧭 AI 技术雷达日报"
+      history_aliases:
+        - "🐙 GitHub 开源早报"

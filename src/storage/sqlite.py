@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import json
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -51,6 +52,14 @@ class SQLiteStorage:
                     metric_name TEXT DEFAULT '',
                     metric_value INTEGER DEFAULT 0,
                     rank INTEGER DEFAULT 0,
+                    open_issues INTEGER DEFAULT 0,
+                    watchers INTEGER DEFAULT 0,
+                    repo_created_at TEXT DEFAULT '',
+                    repo_updated_at TEXT DEFAULT '',
+                    repo_pushed_at TEXT DEFAULT '',
+                    license TEXT DEFAULT '',
+                    topics TEXT DEFAULT '',
+                    archived INTEGER DEFAULT 0,
                     UNIQUE(task_name, date, title)
                 )
             """)
@@ -67,6 +76,19 @@ class SQLiteStorage:
             conn.execute("ALTER TABLE trend_items ADD COLUMN metric_name TEXT DEFAULT ''")
         if "metric_value" not in columns:
             conn.execute("ALTER TABLE trend_items ADD COLUMN metric_value INTEGER DEFAULT 0")
+        extra_columns = {
+            "open_issues": "INTEGER DEFAULT 0",
+            "watchers": "INTEGER DEFAULT 0",
+            "repo_created_at": "TEXT DEFAULT ''",
+            "repo_updated_at": "TEXT DEFAULT ''",
+            "repo_pushed_at": "TEXT DEFAULT ''",
+            "license": "TEXT DEFAULT ''",
+            "topics": "TEXT DEFAULT ''",
+            "archived": "INTEGER DEFAULT 0",
+        }
+        for name, ddl in extra_columns.items():
+            if name not in columns:
+                conn.execute(f"ALTER TABLE trend_items ADD COLUMN {name} {ddl}")
 
         conn.execute("""
             UPDATE trend_items
@@ -103,8 +125,9 @@ class SQLiteStorage:
                 metric_name, metric_value = self._extract_metric(extra)
                 conn.execute(
                     """INSERT OR REPLACE INTO trend_items
-                       (task_name, date, title, url, stars, forks, language, metric_name, metric_value, rank)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       (task_name, date, title, url, stars, forks, language, metric_name, metric_value, rank,
+                        open_issues, watchers, repo_created_at, repo_updated_at, repo_pushed_at, license, topics, archived)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         task_name,
                         today,
@@ -116,6 +139,14 @@ class SQLiteStorage:
                         metric_name,
                         metric_value,
                         rank,
+                        self._as_int(extra.get("open_issues")),
+                        self._as_int(extra.get("watchers")),
+                        extra.get("repo_created_at", ""),
+                        extra.get("repo_updated_at", ""),
+                        extra.get("repo_pushed_at", ""),
+                        extra.get("license", ""),
+                        json.dumps(extra.get("topics") or [], ensure_ascii=False),
+                        1 if extra.get("archived") else 0,
                     ),
                 )
 

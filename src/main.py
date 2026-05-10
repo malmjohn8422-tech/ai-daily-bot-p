@@ -62,8 +62,9 @@ def validate_config(cfg: dict):
         errors.append("配置文件必须是 YAML 对象")
         cfg = {}
 
-    # 检查未解析的环境变量
-    errors.extend(_find_unresolved(cfg, "config"))
+    # 检查必要配置中的未解析环境变量；未使用的通知器允许保留占位符。
+    required_cfg = {k: v for k, v in cfg.items() if k != "notifiers"}
+    errors.extend(_find_unresolved(required_cfg, "config"))
 
     ai_cfg = cfg.get("ai")
     if "ai" not in cfg:
@@ -101,9 +102,31 @@ def validate_config(cfg: dict):
         if not task.get("schedule"):
             errors.append(f"{prefix} [{name}] 缺少 schedule")
 
+        sources = task.get("sources")
         collector = task.get("collector")
-        if not collector:
-            errors.append(f"{prefix} [{name}] 缺少 collector")
+        if sources:
+            if not isinstance(sources, list):
+                errors.append(f"{prefix} [{name}] sources 必须是列表")
+            elif not sources:
+                errors.append(f"{prefix} [{name}] sources 不能为空")
+            else:
+                for j, source in enumerate(sources):
+                    source_prefix = f"{prefix}.sources[{j}]"
+                    if not isinstance(source, dict):
+                        errors.append(f"{source_prefix} 必须是对象")
+                        continue
+                    source_collector = source.get("collector")
+                    if not source_collector:
+                        errors.append(f"{source_prefix} 缺少 collector")
+                    elif source_collector not in COLLECTOR_REGISTRY:
+                        errors.append(
+                            f"{source_prefix} 未知采集器 '{source_collector}'，可选: {list(COLLECTOR_REGISTRY.keys())}"
+                        )
+                    source_params = source.get("params", {})
+                    if source_params is not None and not isinstance(source_params, dict):
+                        errors.append(f"{source_prefix}.params 必须是对象")
+        elif not collector:
+            errors.append(f"{prefix} [{name}] 缺少 collector 或 sources")
         elif collector not in COLLECTOR_REGISTRY:
             errors.append(f"{prefix} [{name}] 未知采集器 '{collector}'，可选: {list(COLLECTOR_REGISTRY.keys())}")
 
@@ -124,13 +147,17 @@ def validate_config(cfg: dict):
             errors.append(f"{prefix} [{name}] 未知通知器 '{notifier_name}'，可选: {list(NOTIFIER_REGISTRY.keys())}")
         elif notifier_name not in notifier_configs:
             errors.append(f"{prefix} [{name}] 未找到通知器 '{notifier_name}' 的配置")
-        elif notifier_name == "telegram":
+        else:
+            notifier_cfg = notifier_configs.get(notifier_name) or {}
+            errors.extend(_find_unresolved(notifier_cfg, f"config.notifiers.{notifier_name}"))
+
+        if notifier_name == "telegram" and notifier_name in notifier_configs:
             telegram_cfg = notifier_configs.get("telegram") or {}
             if not telegram_cfg.get("bot_token"):
                 errors.append(f"{prefix} [{name}] telegram 配置缺少 bot_token")
             if not telegram_cfg.get("chat_id"):
                 errors.append(f"{prefix} [{name}] telegram 配置缺少 chat_id")
-        elif notifier_name == "email":
+        elif notifier_name == "email" and notifier_name in notifier_configs:
             email_cfg = notifier_configs.get("email") or {}
             if not email_cfg.get("smtp_server"):
                 errors.append(f"{prefix} [{name}] email 配置缺少 smtp_server")

@@ -31,9 +31,7 @@ def _prepare_report(task_cfg: dict, ai_config: dict, record_id: int) -> tuple[st
     elif existing_report_path:
         log.warning(f"  {name} 已记录报告路径但文件不存在，将重新生成: {existing_report_path}")
 
-    collector_cls = get_collector(task_cfg["collector"])
-    collector = collector_cls()
-    data = collector.fetch(task_cfg.get("params"))
+    data = _fetch_task_data(task_cfg)
     log.info(f"  {name} 采集到 {len(data)} 条数据")
 
     history = storage.get_trend_history(name, days=7)
@@ -51,6 +49,33 @@ def _prepare_report(task_cfg: dict, ai_config: dict, record_id: int) -> tuple[st
     log.info(f"  {name} 报告已归档: {report_path}")
 
     return result, data, report_path
+
+
+def _fetch_task_data(task_cfg: dict) -> list[dict]:
+    sources = task_cfg.get("sources")
+    if sources:
+        data = []
+        for source_cfg in sources:
+            collector_name = source_cfg["collector"]
+            source_required = bool(source_cfg.get("required", False))
+            try:
+                collector_cls = get_collector(collector_name)
+                collector = collector_cls()
+                source_params = dict(source_cfg.get("params") or {})
+                items = collector.fetch(source_params)
+            except Exception as e:
+                if source_required:
+                    raise
+                log.warning(f"来源 {collector_name} 采集失败，已跳过: {e}")
+                continue
+            for item in items:
+                item.setdefault("extra", {})["source_collector"] = collector_name
+            data.extend(items)
+        return data
+
+    collector_cls = get_collector(task_cfg["collector"])
+    collector = collector_cls()
+    return collector.fetch(task_cfg.get("params"))
 
 
 def _execute_task(task_cfg: dict, ai_config: dict, notifier_configs: dict, record_id: int) -> str:

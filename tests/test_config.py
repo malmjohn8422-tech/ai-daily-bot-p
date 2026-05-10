@@ -74,6 +74,32 @@ class TestValidConfig(unittest.TestCase):
         )
         validate_config(cfg)
 
+    def test_unused_notifier_env_placeholders_are_allowed(self):
+        cfg = _cfg(
+            notifiers={
+                "email": dict(VALID_EMAIL),
+                "telegram": {"bot_token": "${TELEGRAM_BOT_TOKEN}", "chat_id": "${TELEGRAM_CHAT_ID}"},
+            }
+        )
+        validate_config(cfg)
+
+    def test_multi_source_task_valid(self):
+        task = {
+            "name": "t",
+            "schedule": "0 8 * * *",
+            "sources": [
+                {"collector": "github_trending", "params": {"max_articles": 3}},
+                {"collector": "hacker_news", "params": {"query": "ai", "max_articles": 3}},
+                {"collector": "arxiv", "params": {"query": "cat:cs.AI", "max_articles": 3}},
+                {"collector": "hugging_face", "params": {"repo_type": "models", "max_articles": 3}},
+                {"collector": "product_hunt", "params": {"max_articles": 3}},
+                {"collector": "dev_to", "params": {"tag": "ai", "max_articles": 3}},
+            ],
+            "processor": "scored_summarizer",
+            "notifier": "email",
+        }
+        validate_config(_cfg(tasks=[task]))
+
 
 class TestMissingFields(unittest.TestCase):
     def test_missing_ai(self):
@@ -136,6 +162,10 @@ class TestTelegramValidation(unittest.TestCase):
         with self.assertRaises(SystemExit):
             validate_config(self._task_cfg(chat_id=""))
 
+    def test_used_notifier_env_placeholder_is_invalid(self):
+        with self.assertRaises(SystemExit):
+            validate_config(self._task_cfg(bot_token="${TELEGRAM_BOT_TOKEN}"))
+
 
 class TestTaskValidation(unittest.TestCase):
     def test_weekly_missing_task_name(self):
@@ -161,5 +191,16 @@ class TestTaskValidation(unittest.TestCase):
 
     def test_unknown_collector(self):
         t = {"name": "t", "schedule": "0 8 * * *", "collector": "nope", "processor": "summarizer", "notifier": "email"}
+        with self.assertRaises(SystemExit):
+            validate_config(_cfg(tasks=[t]))
+
+    def test_unknown_source_collector(self):
+        t = {
+            "name": "t",
+            "schedule": "0 8 * * *",
+            "sources": [{"collector": "nope"}],
+            "processor": "summarizer",
+            "notifier": "email",
+        }
         with self.assertRaises(SystemExit):
             validate_config(_cfg(tasks=[t]))

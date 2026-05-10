@@ -1,8 +1,10 @@
 from .base import Processor
+from .scored_summarizer import ScoredSummarizerProcessor
 from .summarizer import SummarizerProcessor
 from .weekly import WeeklySummarizerProcessor
 
 REGISTRY = {
+    "scored_summarizer": ScoredSummarizerProcessor,
     "summarizer": SummarizerProcessor,
     "weekly": WeeklySummarizerProcessor,
 }

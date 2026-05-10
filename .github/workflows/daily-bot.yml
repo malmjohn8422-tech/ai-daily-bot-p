@@ -2,8 +2,8 @@ name: Daily Bot
 
 on:
   schedule:
-    # UTC 20:17（北京时间 04:17），预计延迟 3-4 小时后在北京时间上午 8 点左右收到
-    - cron: '17 20 * * *'
+    # UTC 18:17（北京时间 02:17），预计延迟后在北京时间早上 6 点左右收到
+    - cron: '17 18 * * *'
   workflow_dispatch:   # 支持手动触发
 
 jobs:
@@ -39,10 +39,12 @@ jobs:
           EMAIL_USERNAME=${{ secrets.EMAIL_USERNAME }}
           EMAIL_PASSWORD=${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECIPIENT=${{ secrets.EMAIL_RECIPIENT }}
+          GITHUB_TOKEN=${{ github.token }}
+          PRODUCT_HUNT_TOKEN=${{ secrets.PRODUCT_HUNT_TOKEN }}
           EOF
 
       - name: Run bot
-        run: python -m src.main --once --task "🐙 GitHub 开源早报"
+        run: python -m src.main --once --task "🧭 AI 技术雷达日报"
 
       - name: Upload reports as artifacts
         if: always()

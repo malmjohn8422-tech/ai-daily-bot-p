@@ -147,6 +147,75 @@ class TestPrepareReportReuse:
         mock_archive.save.assert_not_called()
 
 
+class TestMultiSourceFetch:
+    @patch("src.scheduler.get_collector")
+    def test_fetch_task_data_combines_sources(self, mock_get_collector):
+        from src.scheduler import _fetch_task_data
+
+        class GithubCollector:
+            def fetch(self, params=None):
+                return [{"title": "repo", "url": "u", "summary": "", "source": "GitHub", "extra": {}}]
+
+        class HnCollector:
+            def fetch(self, params=None):
+                return [{"title": "story", "url": "u2", "summary": "", "source": "HN", "extra": {}}]
+
+        mock_get_collector.side_effect = lambda name: {
+            "github_trending": GithubCollector,
+            "hacker_news": HnCollector,
+        }[name]
+
+        data = _fetch_task_data({
+            "sources": [
+                {"collector": "github_trending", "params": {"max_articles": 1}},
+                {"collector": "hacker_news", "params": {"query": "ai"}},
+            ]
+        })
+
+        assert [item["title"] for item in data] == ["repo", "story"]
+        assert data[0]["extra"]["source_collector"] == "github_trending"
+        assert data[1]["extra"]["source_collector"] == "hacker_news"
+
+    @patch("src.scheduler.get_collector")
+    def test_fetch_task_data_skips_optional_source_failures(self, mock_get_collector):
+        from src.scheduler import _fetch_task_data
+
+        class BrokenCollector:
+            def fetch(self, params=None):
+                raise RuntimeError("boom")
+
+        class GoodCollector:
+            def fetch(self, params=None):
+                return [{"title": "ok", "url": "u", "summary": "", "source": "ok", "extra": {}}]
+
+        mock_get_collector.side_effect = lambda name: {
+            "broken": BrokenCollector,
+            "good": GoodCollector,
+        }[name]
+
+        data = _fetch_task_data({
+            "sources": [
+                {"collector": "broken"},
+                {"collector": "good"},
+            ]
+        })
+
+        assert [item["title"] for item in data] == ["ok"]
+
+    @patch("src.scheduler.get_collector")
+    def test_fetch_task_data_raises_required_source_failures(self, mock_get_collector):
+        from src.scheduler import _fetch_task_data
+
+        class BrokenCollector:
+            def fetch(self, params=None):
+                raise RuntimeError("boom")
+
+        mock_get_collector.return_value = BrokenCollector
+
+        with pytest.raises(RuntimeError, match="boom"):
+            _fetch_task_data({"sources": [{"collector": "broken", "required": True}]})
+
+
 # ── 趋势历史日期窗口 ───────────────────────────────────────────────
 
 class TestTrendHistoryDateWindow:
@@ -191,3 +260,34 @@ class TestTrendHistoryDateWindow:
         # 只取 04-28 ~ 04-30 的数据
         assert "2026-04-01" not in r
         assert "2026-04-29" in r
+
+    def test_repo_detail_fields_are_preserved(self, tmp_path):
+        db = SQLiteStorage(str(tmp_path / "test.db"))
+
+        item = {
+            "title": "a/b",
+            "url": "https://github.com/a/b",
+            "summary": "",
+            "source": "t",
+            "extra": {
+                "stars": 100,
+                "forks": 10,
+                "language": "Python",
+                "open_issues": 3,
+                "watchers": 5,
+                "repo_created_at": "2026-01-01T00:00:00Z",
+                "repo_pushed_at": "2026-05-01T00:00:00Z",
+                "license": "MIT",
+                "topics": ["ai", "daily"],
+                "archived": False,
+            },
+        }
+        db.save_trend_items("t", [item], run_date="2026-04-29")
+
+        r = db.get_trend_history("t", days=7, end_date=date(2026, 4, 30))
+        saved = r["2026-04-29"][0]
+        assert saved["open_issues"] == 3
+        assert saved["watchers"] == 5
+        assert saved["repo_pushed_at"] == "2026-05-01T00:00:00Z"
+        assert saved["license"] == "MIT"
+        assert saved["topics"] == '["ai", "daily"]'
