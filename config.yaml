@@ -53,6 +53,9 @@ tasks:
     notifier: "email"
     params:
       max_items: 40
+      max_recommendations: 12
+      target_words: 1800
+      max_filtered: 12
       preferences:
         min_score: 7
         interests:

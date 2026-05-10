@@ -180,6 +180,9 @@ tasks:
     notifier: "email"
     params:
       max_items: 40              # 最多送入 AI 评分的条目数，控制成本和上下文长度
+      max_recommendations: 12    # 日报最多展开推荐条目数
+      target_words: 1800         # 日报正文目标字数
+      max_filtered: 12           # 已过滤列表最多展示条数
       preferences:
         min_score: 7
         interests:
