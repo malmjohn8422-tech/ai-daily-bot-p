@@ -87,7 +87,7 @@ docker compose logs -f
 
 ### 方式三：GitHub Actions（零成本 CI）
 
-适合不想管服务器的场景。当前 workflow 配置为预计每天北京时间 06:00 左右运行，无需 VPS，无需保持终端。
+适合不想管服务器的场景。当前 workflow 配置为北京时间 05:50 触发，正常情况下接近 06:00 收到，无需 VPS，无需保持终端。
 
 > 注意：GitHub Actions 的 `schedule` 触发是 best-effort，不保证严格准点；平台高负载时可能延迟，极端情况下可能跳过某次定时触发。如果简报必须每天稳定送达，建议使用 VPS/Docker 长期运行，或用外部 cron 服务触发 GitHub Actions。
 

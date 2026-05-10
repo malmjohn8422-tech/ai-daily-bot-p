@@ -2,8 +2,8 @@ name: Weekly Bot
 
 on:
   schedule:
-    # UTC 周六 18:17（北京时间周日 02:17），预计延迟后在北京时间周日早上 6 点左右收到
-    - cron: '17 18 * * 6'
+    # UTC 周六 21:50（北京时间周日 05:50），正常情况下接近北京时间周日早上 6 点收到
+    - cron: '50 21 * * 6'
   workflow_dispatch:
 
 jobs:
